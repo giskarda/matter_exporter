@@ -25,6 +25,11 @@ diagnostics — as Prometheus metrics.
   disappear from the output (Prometheus marks their series stale); nodes that are known but
   unreachable keep reporting `matter_node_available 0` and stop reporting values, so stale
   readings are never presented as current.
+- While the exporter itself is **disconnected from the server**, its picture of the nodes is
+  stale, so it exports no node metrics at all — only its self-metrics
+  (`matter_exporter_server_connected 0`) and the event counters. Alert on
+  `matter_exporter_server_connected == 0` rather than on missing node series. After reconnecting,
+  the state is rebuilt from a fresh node dump.
 
 ## Metrics
 
@@ -46,7 +51,7 @@ consumer — including this exporter — will see it.
 |---|---|---|
 | `matter_temperature_celsius` | °C | Temperature Measurement (0x0402) |
 | `matter_relative_humidity_percent` | % | Relative Humidity Measurement (0x0405) |
-| `matter_pressure_kilopascals` | kPa | Pressure Measurement (0x0403) |
+| `matter_pressure_hectopascals` | hPa | Pressure Measurement (0x0403) |
 | `matter_illuminance_lux` | lx | Illuminance Measurement (0x0400) |
 | `matter_occupancy` | 0/1 | Occupancy Sensing (0x0406) |
 | `matter_contact_state` | 0/1 | Boolean State (0x0045) |
@@ -124,7 +129,7 @@ matter_temperature_celsius
 matter_exporter \
   --matter.server-url=ws://localhost:5580/ws \
   --enrich.rooms-file=/etc/matter_exporter/rooms.yaml \
-  --web.listen-address=:9xxx
+  --web.listen-address=:10063
 ```
 
 | Endpoint | Description |

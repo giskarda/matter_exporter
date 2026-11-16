@@ -114,9 +114,9 @@ matter_temperature_celsius{endpoint="1",node_id="1"} 19.93
 # HELP matter_relative_humidity_percent Relative Humidity Measurement (0x0405) MeasuredValue in percent.
 # TYPE matter_relative_humidity_percent gauge
 matter_relative_humidity_percent{endpoint="1",node_id="1"} 58.24
-# HELP matter_pressure_kilopascals Pressure Measurement (0x0403) MeasuredValue in kilopascals.
-# TYPE matter_pressure_kilopascals gauge
-matter_pressure_kilopascals{endpoint="1",node_id="1"} 101.3
+# HELP matter_pressure_hectopascals Pressure Measurement (0x0403) MeasuredValue in hectopascals.
+# TYPE matter_pressure_hectopascals gauge
+matter_pressure_hectopascals{endpoint="1",node_id="1"} 1013
 # HELP matter_illuminance_lux Illuminance Measurement (0x0400) MeasuredValue in lux.
 # TYPE matter_illuminance_lux gauge
 matter_illuminance_lux{endpoint="1",node_id="1"} 10

@@ -37,7 +37,7 @@ func run() error {
 	var (
 		serverURL     = flag.String("matter.server-url", "ws://localhost:5580/ws", "WebSocket URL of the Matter server.")
 		roomsFile     = flag.String("enrich.rooms-file", "", "Path to rooms.yaml; empty disables room enrichment.")
-		listenAddress = flag.String("web.listen-address", ":9811", "Address to listen on for the web interface and telemetry.")
+		listenAddress = flag.String("web.listen-address", ":10063", "Address to listen on for the web interface and telemetry.")
 		telemetryPath = flag.String("web.telemetry-path", "/metrics", "Path under which to expose metrics.")
 		webConfigFile = flag.String("web.config.file", "", "Path to an exporter-toolkit web configuration file (TLS, basic auth).")
 		logLevel      = flag.String("log.level", "info", "Log level: debug, info, warn, error.")

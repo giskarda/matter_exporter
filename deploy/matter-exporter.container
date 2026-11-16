@@ -20,13 +20,13 @@ After=matterjs-server.service
 Image=localhost/matter_exporter:latest
 ContainerName=matter-exporter
 # Host networking: reaches matterjs-server on localhost:5580 and exposes
-# :9811 on the host. With a bridge network instead, drop Network=host, add
-# PublishPort=9811:9811 and point --matter.server-url at the server.
+# :10063 on the host. With a bridge network instead, drop Network=host, add
+# PublishPort=10063:10063 and point --matter.server-url at the server.
 Network=host
 Volume=/etc/matter_exporter:/etc/matter_exporter:ro
 Exec=--matter.server-url=ws://localhost:5580/ws \
      --enrich.rooms-file=/etc/matter_exporter/rooms.yaml \
-     --web.listen-address=:9811
+     --web.listen-address=:10063
 ReadOnly=true
 NoNewPrivileges=true
 DropCapability=ALL

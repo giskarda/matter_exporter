@@ -37,9 +37,9 @@ var valueMetrics = []valueMetric{
 		convert: scaled(100), // 0.01 %
 	},
 	{
-		desc:      valueDesc("matter_pressure_kilopascals", "Pressure Measurement (0x0403) MeasuredValue in kilopascals."),
+		desc:      valueDesc("matter_pressure_hectopascals", "Pressure Measurement (0x0403) MeasuredValue in hectopascals."),
 		valueType: prometheus.GaugeValue, cluster: 0x0403, attribute: 0,
-		convert: scaled(10), // 0.1 kPa
+		convert: scaled(1), // 0.1 kPa = 1 hPa
 	},
 	{
 		desc:      valueDesc("matter_illuminance_lux", "Illuminance Measurement (0x0400) MeasuredValue in lux."),

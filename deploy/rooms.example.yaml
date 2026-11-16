@@ -5,7 +5,7 @@
 # accepted as a last resort, but it changes when the device is re-commissioned
 # and the exporter logs a warning.
 #
-# Find the identifiers on http://<exporter>:9811/devices. Quote them: some are
+# Find the identifiers on http://<exporter>:10063/devices. Quote them: some are
 # all digits. Devices not listed here get room="unassigned".
 # Apply changes with SIGHUP (systemctl reload matter-exporter.service).
 rooms:
