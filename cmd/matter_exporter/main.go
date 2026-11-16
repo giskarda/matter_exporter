@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/debug"
 	"syscall"
 	"time"
@@ -33,26 +34,39 @@ import (
 // (first free port at the time of writing; not yet registered there).
 const defaultListenAddress = ":10063"
 
-// version reports the module version and VCS revision recorded by the Go
-// toolchain at build time.
-func version() string {
+// build describes the binary, as recorded by the Go toolchain at build time.
+type build struct {
+	version   string // module version, e.g. a tag or a pseudo-version
+	revision  string // VCS revision, with "-dirty" if the tree was modified
+	goVersion string
+}
+
+func buildInfo() build {
+	b := build{version: "unknown", revision: "unknown", goVersion: runtime.Version()}
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
-		return "matter_exporter (unknown version)"
+		return b
 	}
-	revision, modified := "unknown", ""
+	if info.Main.Version != "" {
+		b.version = info.Main.Version
+	}
+	dirty := false
 	for _, s := range info.Settings {
 		switch s.Key {
 		case "vcs.revision":
-			revision = s.Value
+			b.revision = s.Value
 		case "vcs.modified":
-			if s.Value == "true" {
-				modified = "-dirty"
-			}
+			dirty = s.Value == "true"
 		}
 	}
-	return fmt.Sprintf("matter_exporter, version %s (revision: %s%s, go: %s)",
-		info.Main.Version, revision, modified, info.GoVersion)
+	if dirty && b.revision != "unknown" {
+		b.revision += "-dirty"
+	}
+	return b
+}
+
+func (b build) String() string {
+	return fmt.Sprintf("matter_exporter, version %s (revision: %s, go: %s)", b.version, b.revision, b.goVersion)
 }
 
 func main() {
@@ -65,7 +79,8 @@ func main() {
 func run() error {
 	app := kingpin.New("matter_exporter", "Prometheus exporter for Matter smart-home networks.")
 	app.HelpFlag.Short('h')
-	app.Version(version())
+	bi := buildInfo()
+	app.Version(bi.String())
 	var (
 		serverURL     = app.Flag("matter.server-url", "WebSocket URL of the Matter server.").Default("ws://localhost:5580/ws").String()
 		roomsFile     = app.Flag("enrich.rooms-file", "Path to rooms.yaml; empty disables room enrichment.").Default("").String()
@@ -97,6 +112,7 @@ func run() error {
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(
 		collector.New(store),
+		collector.NewBuildInfo(bi.version, bi.revision, bi.goVersion),
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
