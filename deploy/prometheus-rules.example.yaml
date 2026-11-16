@@ -1,0 +1,27 @@
+# Example Prometheus alerting rules for matter_exporter.
+groups:
+  - name: matter
+    rules:
+      - alert: MatterExporterDisconnected
+        expr: matter_exporter_server_connected == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: matter_exporter is not connected to the Matter server
+          description: >-
+            {{ $labels.instance }} has had no WebSocket connection to the Matter
+            server for 5 minutes. No node metrics are exported meanwhile.
+
+      - alert: MatterNodeUnavailable
+        expr: |
+          (matter_node_available == 0)
+            * on(instance, node_id) group_left(name, product) matter_node_info
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Matter node {{ $labels.node_id }} is unavailable
+          description: >-
+            Node {{ $labels.node_id }} ({{ $labels.product }} "{{ $labels.name }}")
+            has been unreachable for 15 minutes.

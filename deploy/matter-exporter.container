@@ -1,0 +1,40 @@
+# Podman quadlet for matter_exporter.
+#
+# Install (rootful):
+#   podman build -f deploy/Containerfile -t localhost/matter_exporter:latest .
+#   install -D -m 0644 deploy/rooms.example.yaml /etc/matter_exporter/rooms.yaml
+#   install -m 0644 deploy/matter-exporter.container /etc/containers/systemd/
+#   systemctl daemon-reload && systemctl start matter-exporter.service
+#
+# Reload rooms.yaml without restarting:
+#   systemctl reload matter-exporter.service
+
+[Unit]
+Description=Prometheus exporter for Matter
+Documentation=https://github.com/giskarda/matter_exporter
+# Adjust to the unit name of your matterjs-server quadlet. The exporter
+# reconnects on its own, so this is ordering only, not a hard dependency.
+After=matterjs-server.service
+
+[Container]
+Image=localhost/matter_exporter:latest
+ContainerName=matter-exporter
+# Host networking: reaches matterjs-server on localhost:5580 and exposes
+# :9811 on the host. With a bridge network instead, drop Network=host, add
+# PublishPort=9811:9811 and point --matter.server-url at the server.
+Network=host
+Volume=/etc/matter_exporter:/etc/matter_exporter:ro
+Exec=--matter.server-url=ws://localhost:5580/ws \
+     --enrich.rooms-file=/etc/matter_exporter/rooms.yaml \
+     --web.listen-address=:9811
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=ALL
+
+[Service]
+Restart=always
+RestartSec=5
+ExecReload=/usr/bin/podman kill --signal=HUP matter-exporter
+
+[Install]
+WantedBy=multi-user.target

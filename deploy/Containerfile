@@ -1,0 +1,14 @@
+# Build from the repository root:
+#   podman build -f deploy/Containerfile -t localhost/matter_exporter:latest .
+FROM docker.io/library/golang:1.27 AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /matter_exporter ./cmd/matter_exporter
+
+FROM scratch
+COPY --from=build /matter_exporter /matter_exporter
+USER 65534:65534
+EXPOSE 9811
+ENTRYPOINT ["/matter_exporter"]

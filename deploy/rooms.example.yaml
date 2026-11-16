@@ -1,0 +1,17 @@
+# Room mapping for matter_exporter (--enrich.rooms-file).
+#
+# Each room lists the devices it contains. Identify a device by its UniqueID
+# (stable across re-commissioning); the SerialNumber also works. A node_id is
+# accepted as a last resort, but it changes when the device is re-commissioned
+# and the exporter logs a warning.
+#
+# Find the identifiers on http://<exporter>:9811/devices. Quote them: some are
+# all digits. Devices not listed here get room="unassigned".
+# Apply changes with SIGHUP (systemctl reload matter-exporter.service).
+rooms:
+  living_room:
+    - "4F2A9C1E7B3D5A60"
+  bathroom:
+    - "9B1D3E5F7A2C4E68"
+  bedroom:
+    - "1C3E5A7B9D2F4A06"
