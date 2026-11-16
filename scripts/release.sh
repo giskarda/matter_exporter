@@ -68,7 +68,7 @@ fi
 git rev-parse --verify --quiet "refs/tags/$version" >/dev/null && die "tag $version already exists"
 
 # The new version must be the highest: a lower tag is almost always a typo.
-previous=$(git tag --list 'v*' --sort=-version:refname | head -n 1)
+previous=$(git -c versionsort.suffix=- tag --list 'v*' --sort=-version:refname | head -n 1)
 if [[ -n $previous ]]; then
 	highest=$(printf '%s\n%s\n' "$previous" "$version" | sort --version-sort | tail -n 1)
 	# sort -V ranks v1.0.0-rc.1 above v1.0.0; a final release after its own
