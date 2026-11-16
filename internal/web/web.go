@@ -9,11 +9,6 @@ import (
 	"github.com/giskarda/matter_exporter/internal/state"
 )
 
-// Source provides state snapshots; *state.Store implements it.
-type Source interface {
-	Snapshot() state.Snapshot
-}
-
 // RoomFunc resolves the room of a node; nil when enrichment is disabled.
 type RoomFunc func(state.Node) string
 
@@ -54,7 +49,7 @@ code { font-size: 1.1em; }
 <table>
 <tr><th>node_id</th><th>unique_id</th><th>serial</th><th>vendor</th><th>product</th><th>name</th>{{if .HasRooms}}<th>room</th>{{end}}<th>available</th></tr>
 {{range .Rows}}<tr><td>{{.NodeID}}</td><td><code>{{.UniqueID}}</code></td><td><code>{{.Serial}}</code></td><td>{{.Vendor}}</td><td>{{.Product}}</td><td>{{.Name}}</td>{{if $.HasRooms}}<td>{{.Room}}</td>{{end}}<td>{{if .Available}}yes{{else}}no{{end}}</td></tr>
-{{else}}<tr><td colspan="8">No nodes.</td></tr>
+{{else}}<tr><td colspan="{{if .HasRooms}}8{{else}}7{{end}}">No nodes.</td></tr>
 {{end}}</table>
 </body>
 </html>
@@ -62,7 +57,7 @@ code { font-size: 1.1em; }
 
 // DevicesHandler renders the table of discovered nodes, the place to look up
 // the identifiers for rooms.yaml.
-func DevicesHandler(src Source, room RoomFunc) http.Handler {
+func DevicesHandler(src state.Source, room RoomFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		snap := src.Snapshot()
 		page := devicesPage{Connected: snap.Connected, HasRooms: room != nil}

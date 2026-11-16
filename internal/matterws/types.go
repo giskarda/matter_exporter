@@ -65,52 +65,42 @@ type Event struct {
 	Data json.RawMessage `json:"data"`
 }
 
-// Node decodes the payload of node_added and node_updated.
-func (e Event) Node() (Node, error) {
-	var n Node
-	err := json.Unmarshal(e.Data, &n)
-	return n, err
+func decode[T any](data json.RawMessage) (T, error) {
+	var v T
+	err := json.Unmarshal(data, &v)
+	return v, err
 }
+
+// Node decodes the payload of node_added and node_updated.
+func (e Event) Node() (Node, error) { return decode[Node](e.Data) }
 
 // NodeID decodes the payload of node_removed.
-func (e Event) NodeID() (uint64, error) {
-	var id uint64
-	err := json.Unmarshal(e.Data, &id)
-	return id, err
-}
+func (e Event) NodeID() (uint64, error) { return decode[uint64](e.Data) }
 
-// AttributeUpdate decodes the payload of attribute_updated.
+// NodeEvent decodes the payload of node_event.
+func (e Event) NodeEvent() (NodeEvent, error) { return decode[NodeEvent](e.Data) }
+
+// Endpoint decodes the payload of endpoint_added and endpoint_removed.
+func (e Event) Endpoint() (EndpointRef, error) { return decode[EndpointRef](e.Data) }
+
+// AttributeUpdate decodes the payload of attribute_updated, a
+// [node_id, path, value] array.
 func (e Event) AttributeUpdate() (AttributeUpdate, error) {
-	var parts []json.RawMessage
-	if err := json.Unmarshal(e.Data, &parts); err != nil {
+	parts, err := decode[[]json.RawMessage](e.Data)
+	if err != nil {
 		return AttributeUpdate{}, err
 	}
 	if len(parts) != 3 {
 		return AttributeUpdate{}, fmt.Errorf("attribute_updated: want 3 elements, got %d", len(parts))
 	}
-	var u AttributeUpdate
-	if err := json.Unmarshal(parts[0], &u.NodeID); err != nil {
+	u := AttributeUpdate{Value: parts[2]}
+	if u.NodeID, err = decode[uint64](parts[0]); err != nil {
 		return AttributeUpdate{}, fmt.Errorf("attribute_updated node id: %w", err)
 	}
-	if err := json.Unmarshal(parts[1], &u.Path); err != nil {
+	if u.Path, err = decode[string](parts[1]); err != nil {
 		return AttributeUpdate{}, fmt.Errorf("attribute_updated path: %w", err)
 	}
-	u.Value = parts[2]
 	return u, nil
-}
-
-// NodeEvent decodes the payload of node_event.
-func (e Event) NodeEvent() (NodeEvent, error) {
-	var ev NodeEvent
-	err := json.Unmarshal(e.Data, &ev)
-	return ev, err
-}
-
-// Endpoint decodes the payload of endpoint_added and endpoint_removed.
-func (e Event) Endpoint() (EndpointRef, error) {
-	var ref EndpointRef
-	err := json.Unmarshal(e.Data, &ref)
-	return ref, err
 }
 
 // message is the envelope of anything the server sends after the server info.

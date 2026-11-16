@@ -89,7 +89,7 @@ From the Thread Network Diagnostics cluster (0x0035), when exposed by the device
 |---|---|
 | `matter_exporter_server_connected` | 1 while the WebSocket connection is up |
 | `matter_exporter_reconnects_total` | WebSocket reconnections |
-| `matter_exporter_events_total{type}` | events received from the server |
+| `matter_exporter_events_total{type}` | events received from the server; types the exporter does not recognise are counted as `type="unknown"` |
 | `matter_exporter_last_event_timestamp_seconds` | time of the last event |
 | `matter_exporter_build_info{version,revision,goversion}` | build information of the running binary; always 1 |
 

@@ -1,7 +1,6 @@
 package state
 
 import (
-	"bytes"
 	"cmp"
 	"encoding/json"
 	"log/slog"
@@ -27,6 +26,22 @@ var switchEventNames = map[uint32]string{
 	4: "long_release",
 	5: "multi_press_ongoing",
 	6: "multi_press_complete",
+}
+
+// UnknownEvent is the type under which events this exporter does not know
+// are counted. Counting them under the name the server sent would let the
+// server create an unbounded number of series.
+const UnknownEvent = "unknown"
+
+var knownEvents = map[string]bool{
+	matterws.EventNodeAdded:        true,
+	matterws.EventNodeUpdated:      true,
+	matterws.EventNodeRemoved:      true,
+	matterws.EventAttributeUpdated: true,
+	matterws.EventNodeEvent:        true,
+	matterws.EventEndpointAdded:    true,
+	matterws.EventEndpointRemoved:  true,
+	matterws.EventServerShutdown:   true,
 }
 
 // EndpointKey identifies an endpoint of a node.
@@ -58,7 +73,7 @@ type Snapshot struct {
 	Nodes []Node
 
 	Reconnects uint64
-	Events     map[string]uint64 // by event type
+	Events     map[string]uint64 // by event type; unrecognised types share UnknownEvent
 	LastEvent  time.Time         // zero if no event was ever received
 
 	SwitchEvents        map[SwitchEventKey]uint64
@@ -168,8 +183,13 @@ func (s *Store) Event(ev matterws.Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.events[ev.Type]++
 	s.lastEvent = s.now()
+	if !knownEvents[ev.Type] {
+		s.events[UnknownEvent]++
+		s.logger.Debug("ignoring unknown event type", "event", ev.Type)
+		return
+	}
+	s.events[ev.Type]++
 
 	var err error
 	switch ev.Type {
@@ -204,8 +224,6 @@ func (s *Store) Event(ev matterws.Event) {
 	case matterws.EventEndpointAdded, matterws.EventServerShutdown:
 		// Nothing to do: attributes of a new endpoint arrive with the
 		// node_updated that follows; shutdown is handled by the client.
-	default:
-		s.logger.Debug("ignoring unknown event type", "event", ev.Type)
 	}
 	if err != nil {
 		s.logger.Warn("cannot apply event", "event", ev.Type, "err", err)
@@ -251,11 +269,14 @@ func (s *Store) applyNodeEvent(ne matterws.NodeEvent) {
 	if ne.ClusterID != clusterSwitch {
 		return
 	}
-	if _, ok := s.nodes[ne.NodeID]; !ok {
-		return
-	}
 	name, ok := switchEventNames[ne.EventID]
 	if !ok {
+		return
+	}
+	// Only count events for endpoints the node is known to have, so the
+	// number of series stays bounded by the discovered topology.
+	n, ok := s.nodes[ne.NodeID]
+	if !ok || !slices.Contains(n.Endpoints(), ne.EndpointID) {
 		return
 	}
 	s.switchEvents[SwitchEventKey{ne.NodeID, ne.EndpointID, name}]++
@@ -308,11 +329,11 @@ func isContactState(p Path) bool {
 // contactChanged reports a transition between two known boolean values. The
 // first value ever seen and null (unknown) on either side do not count.
 func contactChanged(old, fresh json.RawMessage) bool {
-	var a, b bool
-	if json.Unmarshal(old, &a) != nil || json.Unmarshal(fresh, &b) != nil {
+	if isNull(old) || isNull(fresh) {
 		return false
 	}
-	if bytes.Equal(bytes.TrimSpace(old), jsonNull) || bytes.Equal(bytes.TrimSpace(fresh), jsonNull) {
+	var a, b bool
+	if json.Unmarshal(old, &a) != nil || json.Unmarshal(fresh, &b) != nil {
 		return false
 	}
 	return a != b

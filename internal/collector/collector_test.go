@@ -10,28 +10,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/giskarda/matter_exporter/internal/state"
+	"github.com/giskarda/matter_exporter/internal/state/statetest"
 )
-
-type fakeSource struct{ snap state.Snapshot }
-
-func (f fakeSource) Snapshot() state.Snapshot { return f.snap }
-
-func node(t *testing.T, id uint64, available bool, attrs map[string]string) state.Node {
-	t.Helper()
-	n := state.Node{ID: id, Available: available, Attrs: map[state.Path]json.RawMessage{}}
-	for k, v := range attrs {
-		p, err := state.ParsePath(k)
-		if err != nil {
-			t.Fatal(err)
-		}
-		n.Attrs[p] = json.RawMessage(v)
-	}
-	return n
-}
 
 // sensorNode exercises every curated metric.
 func sensorNode(t *testing.T, id uint64, available bool) state.Node {
-	return node(t, id, available, map[string]string{
+	return statetest.Node(t, id, available, map[string]string{
 		// Root endpoint: metadata, battery, Thread diagnostics.
 		"0/29/0":  `[{"0":22,"1":2},{"0":17,"1":1}]`,
 		"0/29/1":  `[29,40,47,53]`,
@@ -215,7 +199,7 @@ matter_node_availability_changes_total{node_id="1",to="unavailable"} 2
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := New(fakeSource{tt.snap(t)})
+			c := New(&statetest.Source{Snap: tt.snap(t)})
 			if err := testutil.CollectAndCompare(c, strings.NewReader(tt.want)); err != nil {
 				t.Error(err)
 			}

@@ -59,7 +59,7 @@ func collectThread(ch chan<- prometheus.Metric, n state.Node) {
 		if !ok {
 			name = fmt.Sprintf("unknown_%d", role)
 		}
-		ch <- prometheus.MustNewConstMetric(threadRoleDesc, prometheus.GaugeValue, 1, id, name)
+		gauge(ch, threadRoleDesc, 1, id, name)
 	}
 
 	var neighbors []threadNeighbor
@@ -79,10 +79,10 @@ func collectThread(ch chan<- prometheus.Metric, n state.Node) {
 			rssi = nb.LastRSSI
 		}
 		if rssi != nil {
-			ch <- prometheus.MustNewConstMetric(threadNeighborRSSIDesc, prometheus.GaugeValue, *rssi, id, addr)
+			gauge(ch, threadNeighborRSSIDesc, *rssi, id, addr)
 		}
 		if nb.LQI != nil {
-			ch <- prometheus.MustNewConstMetric(threadNeighborLQIDesc, prometheus.GaugeValue, *nb.LQI, id, addr)
+			gauge(ch, threadNeighborLQIDesc, *nb.LQI, id, addr)
 		}
 	}
 }

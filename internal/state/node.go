@@ -20,6 +20,12 @@ const (
 	attrServerList     = 1
 )
 
+// Source provides snapshots; *Store implements it. Collectors and pages
+// depend on this rather than on the store.
+type Source interface {
+	Snapshot() Snapshot
+}
+
 // Path identifies an attribute on a node.
 type Path struct {
 	Endpoint  uint16
@@ -62,13 +68,16 @@ type Node struct {
 	Attrs map[Path]json.RawMessage
 }
 
-var jsonNull = []byte("null")
+// isNull reports whether a raw value is JSON null, Matter's "unknown".
+func isNull(raw json.RawMessage) bool {
+	return bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
+}
 
 // Raw returns the raw value of an attribute. ok is false when the attribute
 // is absent or null (null means "unknown" in Matter).
 func (n Node) Raw(endpoint uint16, cluster, attribute uint32) (json.RawMessage, bool) {
 	v, ok := n.Attrs[Path{endpoint, cluster, attribute}]
-	if !ok || bytes.Equal(bytes.TrimSpace(v), jsonNull) {
+	if !ok || isNull(v) {
 		return nil, false
 	}
 	return v, true

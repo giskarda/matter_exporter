@@ -14,6 +14,11 @@ import (
 
 const startListeningID = "1"
 
+// defaultMaxMessageBytes bounds a single server message. The node dump is
+// one frame of roughly 8 KiB per node, so this leaves room for thousands of
+// nodes while keeping a misbehaving server from exhausting memory.
+const defaultMaxMessageBytes = 64 << 20
+
 // Handler receives everything the client learns from the server. Methods are
 // called sequentially from the goroutine running Client.Run.
 type Handler interface {
@@ -38,6 +43,9 @@ type Client struct {
 	MaxBackoff time.Duration
 	// PingInterval is how often the connection is probed (default 30s).
 	PingInterval time.Duration
+	// MaxMessageBytes is the largest message accepted from the server
+	// (default 64 MiB). A larger one ends the connection.
+	MaxMessageBytes int64
 }
 
 // Run connects and keeps reconnecting until ctx is cancelled.
@@ -90,8 +98,11 @@ func (c *Client) session(ctx context.Context, logger *slog.Logger) (listening bo
 		return false, fmt.Errorf("dial: %w", err)
 	}
 	defer conn.CloseNow()
-	// The node dump is a single frame and grows with the number of nodes.
-	conn.SetReadLimit(-1)
+	limit := c.MaxMessageBytes
+	if limit <= 0 {
+		limit = defaultMaxMessageBytes
+	}
+	conn.SetReadLimit(limit)
 
 	handshakeCtx, handshakeCancel := context.WithTimeout(ctx, 60*time.Second)
 	defer handshakeCancel()

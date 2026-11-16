@@ -21,11 +21,6 @@ import (
 // Unassigned is the room of nodes that are not in the mapping file.
 const Unassigned = "unassigned"
 
-// Source provides state snapshots; *state.Store implements it.
-type Source interface {
-	Snapshot() state.Snapshot
-}
-
 // file is the on-disk format:
 //
 //	rooms:
@@ -107,7 +102,7 @@ func (m *Mapping) lookup(n state.Node) (string, matchKind) {
 // Enricher holds the current mapping and exposes it as a collector.
 type Enricher struct {
 	path   string
-	src    Source
+	src    state.Source
 	logger *slog.Logger
 
 	mu      sync.Mutex
@@ -118,7 +113,7 @@ type Enricher struct {
 }
 
 // New loads the mapping file; it fails if the file cannot be read or parsed.
-func New(path string, src Source, logger *slog.Logger) (*Enricher, error) {
+func New(path string, src state.Source, logger *slog.Logger) (*Enricher, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}

@@ -1,11 +1,9 @@
 package matterws_test
 
 import (
-	"context"
-	"log/slog"
+	"bytes"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/giskarda/matter_exporter/internal/matterws"
 	"github.com/giskarda/matter_exporter/internal/matterws/wstest"
@@ -47,46 +45,14 @@ func (r *recorder) counts() (dumps, events, disconnects int) {
 	return len(r.dumps), len(r.events), r.disconnects
 }
 
-func waitFor(t *testing.T, what string, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-}
-
-func runClient(t *testing.T, url string, h matterws.Handler) {
-	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	c := &matterws.Client{
-		URL:        url,
-		Handler:    h,
-		Logger:     slog.New(slog.DiscardHandler),
-		MinBackoff: time.Millisecond,
-		MaxBackoff: 10 * time.Millisecond,
-	}
-	go func() {
-		defer close(done)
-		_ = c.Run(ctx)
-	}()
-	t.Cleanup(func() {
-		cancel()
-		<-done
-	})
-}
-
 func TestClientReplaysCapture(t *testing.T) {
 	capture := wstest.LoadCapture(t, capturePath)
 	srv := wstest.ReplayOnce(t, capture)
 	rec := &recorder{}
-	runClient(t, srv.URL(), rec)
+	wstest.Run(t, srv.URL(), rec, nil)
 
 	wantEvents := len(capture) - 2
-	waitFor(t, "all events", func() bool { _, n, _ := rec.counts(); return n == wantEvents })
+	wstest.WaitFor(t, "all events", func() bool { _, n, _ := rec.counts(); return n == wantEvents })
 
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
@@ -157,9 +123,9 @@ func TestClientReconnects(t *testing.T) {
 		return capture[:2], false
 	})
 	rec := &recorder{}
-	runClient(t, srv.URL(), rec)
+	wstest.Run(t, srv.URL(), rec, nil)
 
-	waitFor(t, "second dump", func() bool { d, _, _ := rec.counts(); return d == 2 })
+	wstest.WaitFor(t, "second dump", func() bool { d, _, _ := rec.counts(); return d == 2 })
 	dumps, events, disconnects := rec.counts()
 	if dumps != 2 || events != 1 || disconnects != 1 {
 		t.Errorf("dumps=%d events=%d disconnects=%d, want 2, 1, 1", dumps, events, disconnects)
@@ -220,9 +186,9 @@ func TestClientServerMessages(t *testing.T) {
 				return [][]byte{info, dump}, false
 			})
 			rec := &recorder{}
-			runClient(t, srv.URL(), rec)
+			wstest.Run(t, srv.URL(), rec, nil)
 
-			waitFor(t, "expected dumps", func() bool { d, _, _ := rec.counts(); return d == tt.wantDumps })
+			wstest.WaitFor(t, "expected dumps", func() bool { d, _, _ := rec.counts(); return d == tt.wantDumps })
 			if srv.Connections.Load() < 2 {
 				t.Errorf("expected a reconnection, got %d connections", srv.Connections.Load())
 			}
@@ -232,5 +198,29 @@ func TestClientServerMessages(t *testing.T) {
 					dumps, events, disconnects, tt.wantDumps, tt.wantEvents, tt.wantDisconnects)
 			}
 		})
+	}
+}
+
+func TestClientMessageSizeLimit(t *testing.T) {
+	info := []byte(`{"schema_version":14,"sdk_version":"test"}`)
+	dump := []byte(`{"message_id":"1","result":[]}`)
+	oversized := append(append([]byte(`{"event":"attribute_updated","data":[1,"0/40/5","`),
+		bytes.Repeat([]byte("x"), 4096)...), `"]}`...)
+
+	// First connection: an oversized event. Later ones: nothing after the dump.
+	srv := wstest.Replay(t, func(conn int) ([][]byte, bool) {
+		if conn == 1 {
+			return [][]byte{info, dump, oversized}, false
+		}
+		return [][]byte{info, dump}, false
+	})
+	rec := &recorder{}
+	wstest.Run(t, srv.URL(), rec, func(c *matterws.Client) { c.MaxMessageBytes = 1024 })
+
+	wstest.WaitFor(t, "reconnection", func() bool { d, _, _ := rec.counts(); return d == 2 })
+	dumps, events, disconnects := rec.counts()
+	if dumps != 2 || events != 0 || disconnects != 1 {
+		t.Errorf("dumps=%d events=%d disconnects=%d, want 2, 0, 1: the oversized message must end the connection undelivered",
+			dumps, events, disconnects)
 	}
 }

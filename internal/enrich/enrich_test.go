@@ -2,33 +2,31 @@ package enrich
 
 import (
 	"bytes"
-	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/giskarda/matter_exporter/internal/state"
+	"github.com/giskarda/matter_exporter/internal/state/statetest"
 )
 
-type fakeSource struct{ snap state.Snapshot }
-
-func (f fakeSource) Snapshot() state.Snapshot { return f.snap }
-
-func node(id uint64, uniqueID, serial string) state.Node {
-	n := state.Node{ID: id, Available: true, Attrs: map[state.Path]json.RawMessage{}}
-	set := func(attr uint32, v string) {
-		if v != "" {
-			raw, _ := json.Marshal(v)
-			n.Attrs[state.Path{Endpoint: 0, Cluster: state.ClusterBasicInfo, Attribute: attr}] = raw
-		}
+// node builds a node with the given UniqueID and SerialNumber; empty means
+// the attribute is absent.
+func node(t *testing.T, id uint64, uniqueID, serial string) state.Node {
+	t.Helper()
+	attrs := map[string]string{}
+	if uniqueID != "" {
+		attrs["0/40/18"] = strconv.Quote(uniqueID)
 	}
-	set(18, uniqueID)
-	set(15, serial)
-	return n
+	if serial != "" {
+		attrs["0/40/15"] = strconv.Quote(serial)
+	}
+	return statetest.Node(t, id, true, attrs)
 }
 
 const roomsYAML = `
@@ -83,23 +81,24 @@ func TestLookup(t *testing.T) {
 		t.Fatal(err)
 	}
 	tests := []struct {
-		name     string
-		node     state.Node
-		wantRoom string
-		wantKind matchKind
+		name             string
+		id               uint64
+		uniqueID, serial string
+		wantRoom         string
+		wantKind         matchKind
 	}{
-		{"by unique id", node(1, "4F2A9C1E7B3D5A60", "whatever"), "living_room", matchUniqueID},
-		{"unique id is case-insensitive", node(2, "9B1D3E5F7A2C4E68", ""), "bathroom", matchUniqueID},
-		{"by serial", node(3, "UNKNOWN", "SN-PLUG-1"), "living_room", matchSerial},
-		{"numeric serial written unquoted", node(4, "", "17365112704004802477"), "bedroom", matchSerial},
-		{"by node id", node(7, "UNKNOWN", "UNKNOWN"), "bedroom", matchNodeID},
-		{"unique id wins over node id", node(7, "9b1d3e5f7a2c4e68", ""), "bathroom", matchUniqueID},
-		{"unmapped", node(9, "NOPE", "NOPE"), Unassigned, matchNone},
-		{"no metadata", node(10, "", ""), Unassigned, matchNone},
+		{"by unique id", 1, "4F2A9C1E7B3D5A60", "whatever", "living_room", matchUniqueID},
+		{"unique id is case-insensitive", 2, "9B1D3E5F7A2C4E68", "", "bathroom", matchUniqueID},
+		{"by serial", 3, "UNKNOWN", "SN-PLUG-1", "living_room", matchSerial},
+		{"numeric serial written unquoted", 4, "", "17365112704004802477", "bedroom", matchSerial},
+		{"by node id", 7, "UNKNOWN", "UNKNOWN", "bedroom", matchNodeID},
+		{"unique id wins over node id", 7, "9b1d3e5f7a2c4e68", "", "bathroom", matchUniqueID},
+		{"unmapped", 9, "NOPE", "NOPE", Unassigned, matchNone},
+		{"no metadata", 10, "", "", Unassigned, matchNone},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			room, kind := m.lookup(tt.node)
+			room, kind := m.lookup(node(t, tt.id, tt.uniqueID, tt.serial))
 			if room != tt.wantRoom || kind != tt.wantKind {
 				t.Errorf("lookup = %q, %v; want %q, %v", room, kind, tt.wantRoom, tt.wantKind)
 			}
@@ -113,10 +112,10 @@ func TestEnricher(t *testing.T) {
 		t.Fatal(err)
 	}
 	var logs bytes.Buffer
-	src := &fakeSource{snap: state.Snapshot{Connected: true, Nodes: []state.Node{
-		node(1, "4F2A9C1E7B3D5A60", ""),
-		node(7, "", ""),
-		node(9, "NOPE", ""),
+	src := &statetest.Source{Snap: state.Snapshot{Connected: true, Nodes: []state.Node{
+		node(t, 1, "4F2A9C1E7B3D5A60", ""),
+		node(t, 7, "", ""),
+		node(t, 9, "NOPE", ""),
 	}}}
 	e, err := New(path, src, slog.New(slog.NewTextHandler(&logs, nil)))
 	if err != nil {
@@ -169,14 +168,14 @@ matter_node_room{node_id="9",room="attic"} 1
 	}
 
 	// Nothing is exported while disconnected.
-	src.snap.Connected = false
+	src.Snap.Connected = false
 	if n := testutil.CollectAndCount(e); n != 0 {
 		t.Errorf("disconnected: %d metrics, want 0", n)
 	}
 }
 
 func TestNewMissingFile(t *testing.T) {
-	if _, err := New(filepath.Join(t.TempDir(), "missing.yaml"), fakeSource{}, nil); err == nil {
+	if _, err := New(filepath.Join(t.TempDir(), "missing.yaml"), &statetest.Source{}, nil); err == nil {
 		t.Fatal("want error for a missing file")
 	}
 }

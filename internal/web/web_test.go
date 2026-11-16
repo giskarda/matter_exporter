@@ -1,27 +1,14 @@
 package web
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/giskarda/matter_exporter/internal/state"
+	"github.com/giskarda/matter_exporter/internal/state/statetest"
 )
-
-type fakeSource struct{ snap state.Snapshot }
-
-func (f fakeSource) Snapshot() state.Snapshot { return f.snap }
-
-func node(id uint64, available bool, attrs map[uint32]string) state.Node {
-	n := state.Node{ID: id, Available: available, Attrs: map[state.Path]json.RawMessage{}}
-	for attr, v := range attrs {
-		raw, _ := json.Marshal(v)
-		n.Attrs[state.Path{Endpoint: 0, Cluster: state.ClusterBasicInfo, Attribute: attr}] = raw
-	}
-	return n
-}
 
 func get(t *testing.T, h http.Handler) (int, string) {
 	t.Helper()
@@ -32,8 +19,11 @@ func get(t *testing.T, h http.Handler) (int, string) {
 
 func TestDevicesHandler(t *testing.T) {
 	nodes := []state.Node{
-		node(4, true, map[uint32]string{1: "Eve Systems", 3: "Eve Energy", 5: "<b>plug</b>", 15: "SN1", 18: "UID-4"}),
-		node(6, false, map[uint32]string{3: "Sensor", 18: "UID-6"}),
+		statetest.Node(t, 4, true, map[string]string{
+			"0/40/1": `"Eve Systems"`, "0/40/3": `"Eve Energy"`, "0/40/5": `"<b>plug</b>"`,
+			"0/40/15": `"SN1"`, "0/40/18": `"UID-4"`,
+		}),
+		statetest.Node(t, 6, false, map[string]string{"0/40/3": `"Sensor"`, "0/40/18": `"UID-6"`}),
 	}
 	rooms := func(n state.Node) string {
 		if n.ID == 4 {
@@ -74,12 +64,12 @@ func TestDevicesHandler(t *testing.T) {
 		{
 			name:     "no nodes",
 			snap:     state.Snapshot{Connected: true},
-			contains: []string{"No nodes."},
+			contains: []string{`<td colspan="7">No nodes.</td>`},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			code, body := get(t, DevicesHandler(fakeSource{tt.snap}, tt.room))
+			code, body := get(t, DevicesHandler(&statetest.Source{Snap: tt.snap}, tt.room))
 			if code != http.StatusOK {
 				t.Fatalf("status = %d", code)
 			}

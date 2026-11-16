@@ -98,9 +98,10 @@ func run() error {
 	if err := level.UnmarshalText([]byte(*logLevel)); err != nil {
 		return fmt.Errorf("--log.level: %w", err)
 	}
-	var handler slog.Handler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})
+	opts := &slog.HandlerOptions{Level: level}
+	var handler slog.Handler = slog.NewTextHandler(os.Stderr, opts)
 	if *logFormat == "json" {
-		handler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level})
+		handler = slog.NewJSONHandler(os.Stderr, opts)
 	}
 	logger := slog.New(handler)
 
@@ -117,7 +118,7 @@ func run() error {
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
 
-	// Room enrichment is optional and lives entirely outside the core.
+	// Room enrichment is optional and stays out of the core collector.
 	var roomOf web.RoomFunc
 	if *roomsFile != "" {
 		enricher, err := enrich.New(*roomsFile, store, logger)

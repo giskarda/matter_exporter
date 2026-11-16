@@ -6,14 +6,18 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/giskarda/matter_exporter/internal/matterws"
 )
 
 // LoadCapture reads a JSONL capture: one WebSocket message per line, the
@@ -104,4 +108,42 @@ func Replay(t testing.TB, session func(conn int) (messages [][]byte, hangUp bool
 // hanging up.
 func ReplayOnce(t testing.TB, messages [][]byte) *Server {
 	return Replay(t, func(int) ([][]byte, bool) { return messages, false })
+}
+
+// Run starts a client against url with fast reconnects and stops it when the
+// test ends. configure, if not nil, can adjust the client before it starts.
+func Run(t testing.TB, url string, h matterws.Handler, configure func(*matterws.Client)) {
+	t.Helper()
+	c := &matterws.Client{
+		URL:        url,
+		Handler:    h,
+		Logger:     slog.New(slog.DiscardHandler),
+		MinBackoff: time.Millisecond,
+		MaxBackoff: 10 * time.Millisecond,
+	}
+	if configure != nil {
+		configure(c)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = c.Run(ctx)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+}
+
+// WaitFor polls cond until it holds, failing the test after a few seconds.
+func WaitFor(t testing.TB, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }
